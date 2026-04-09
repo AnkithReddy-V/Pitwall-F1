@@ -1,0 +1,16 @@
+driverId,driver_ref,full_name,primary_brand_partner,brand_tier,social_following_M,est_market_value_M_USD,glamour_index,notes
+1,hamilton,Lewis Hamilton,Mercedes/IWC,3,45.0,285,11.48,GOAT commercial value
+830,max_verstappen,Max Verstappen,Red Bull/Oracle,2,18.0,210,5.89,Rising commercial star
+4,alonso,Fernando Alonso,Aston Martin/Kimoa,2,14.0,80,5.35,Veteran brand builder
+817,leclerc,Charles Leclerc,Ferrari/Richard Mille,3,16.0,110,8.34,Ferrari halo effect
+832,sainz,Carlos Sainz,Ferrari/Kimoa,2,11.0,75,4.93,Strong Spanish market
+847,norris,Lando Norris,McLaren/Google,2,20.0,95,6.00,Gen-Z fan favourite
+846,piastri,Oscar Piastri,McLaren/Google,1,5.0,40,1.79,Early career
+840,russell,George Russell,Mercedes/Tommy Hilfiger,2,8.0,70,4.16,Growing brand
+839,perez,Sergio Perez,Red Bull/Telmex,2,12.0,85,4.97,Massive Latin America reach
+822,bottas,Valtteri Bottas,Alfa Romeo/various,1,4.0,30,1.61,Cult following
+8,raikkonen,Kimi Raikkonen,Ferrari/various,3,6.0,72,5.24,Iceman brand legendary
+20,vettel,Sebastian Vettel,Ferrari/Aston Martin,3,5.0,95,4.83,Retired but iconic
+3,rosberg,Nico Rosberg,Mercedes/various,2,6.0,60,3.59,Champion turned pundit
+18,stroll,Lance Stroll,Aston Martin/family,2,3.0,180,2.77,Billionaire backing
+836,zhou,Guanyu Zhou,Alfa Romeo/Chinese brands,2,8.0,45,4.16,Huge China market value
