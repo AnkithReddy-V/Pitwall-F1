@@ -1,0 +1,92 @@
+[
+  {
+    "id": 1,
+    "question": "Who has the most race wins in F1 history?",
+    "expected_keywords": ["hamilton", "105"],
+    "category": "stats"
+  },
+  {
+    "id": 2,
+    "question": "How many World Championship titles did Michael Schumacher win?",
+    "expected_keywords": ["schumacher", "7"],
+    "category": "stats"
+  },
+  {
+    "id": 3,
+    "question": "Which constructor has the most race wins in F1 history?",
+    "expected_keywords": ["ferrari"],
+    "category": "stats"
+  },
+  {
+    "id": 4,
+    "question": "Who won the most races in a single F1 season?",
+    "expected_keywords": ["verstappen", "19"],
+    "category": "stats"
+  },
+  {
+    "id": 5,
+    "question": "Which circuit has hosted the most F1 races?",
+    "expected_keywords": ["monza", "silverstone", "monaco"],
+    "category": "stats"
+  },
+  {
+    "id": 6,
+    "question": "What nationality has produced the most F1 drivers?",
+    "expected_keywords": ["british", "uk", "american"],
+    "category": "stats"
+  },
+  {
+    "id": 7,
+    "question": "Who has the most pole positions in F1 history?",
+    "expected_keywords": ["hamilton", "senna"],
+    "category": "stats"
+  },
+  {
+    "id": 8,
+    "question": "Which team has the fastest average pit stop time?",
+    "expected_keywords": ["red bull", "mercedes", "ferrari", "virgin"],
+    "category": "stats"
+  },
+  {
+    "id": 9,
+    "question": "How many races did Ayrton Senna win in his F1 career?",
+    "expected_keywords": ["41", "senna"],
+    "category": "stats"
+  },
+  {
+    "id": 10,
+    "question": "Which driver has the highest glamour index?",
+    "expected_keywords": ["hamilton"],
+    "category": "glamour"
+  },
+  {
+    "id": 11,
+    "question": "Which driver has the highest estimated market value?",
+    "expected_keywords": ["hamilton"],
+    "category": "glamour"
+  },
+  {
+    "id": 12,
+    "question": "Tell me about Ayrton Senna's driving style",
+    "expected_keywords": ["senna", "wet", "aggressive", "monaco"],
+    "category": "narrative"
+  },
+  {
+    "id": 13,
+    "question": "What is Red Bull Racing known for?",
+    "expected_keywords": ["red bull", "verstappen", "vettel"],
+    "category": "narrative"
+  },
+  {
+    "id": 14,
+    "question": "How many races are in the Ergast F1 dataset?",
+    "expected_keywords": ["1"],
+    "category": "meta"
+  },
+  {
+    "id": 15,
+    "question": "Which driver won the most races at Monaco?",
+    "expected_keywords": ["senna", "monaco"],
+    "category": "stats"
+  }
+]

@@ -1,0 +1,473 @@
+{
+  "timestamp": "2026-04-09T17:41:11.640404",
+  "total_questions": 15,
+  "passed": 14,
+  "failed": 1,
+  "sql_accuracy": 86.7,
+  "faith_accuracy": 93.3,
+  "overall_score": 90.0,
+  "by_category": {
+    "stats": {
+      "passed": 9,
+      "total": 10,
+      "pct": 90.0
+    },
+    "glamour": {
+      "passed": 2,
+      "total": 2,
+      "pct": 100.0
+    },
+    "narrative": {
+      "passed": 2,
+      "total": 2,
+      "pct": 100.0
+    },
+    "meta": {
+      "passed": 1,
+      "total": 1,
+      "pct": 100.0
+    }
+  },
+  "results": [
+    {
+      "id": 1,
+      "question": "Who has the most race wins in F1 history?",
+      "category": "stats",
+      "answer": "Lewis Hamilton holds the record for the most race wins in F1 history with 105 victories.\n\nSource: `pitwall-492723.f1_data.results`, `pitwall-492723.f1_data.drivers`",
+      "sql": "SELECT d.forename, d.surname, COUNT(r.position) AS total_wins FROM `pitwall-492723.f1_data.results` AS r JOIN `pitwall-492723.f1_data.drivers` AS d ON r.driverId = d.driverId WHERE r.position = 1 GROUP BY d.forename, d.surname ORDER BY total_wins DESC LIMIT 1",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 3,
+      "tool_calls": 2,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "hamilton",
+          "105"
+        ],
+        "misses": [],
+        "score": 1.0
+      },
+      "passed": true
+    },
+    {
+      "id": 2,
+      "question": "How many World Championship titles did Michael Schumacher win?",
+      "category": "stats",
+      "answer": "Michael Schumacher won 7 Formula 1 World Championship titles.\n\n**Sources:**\n*   `pitwall-492723.f1_data.driver_standings` table\n*   `pitwall-492723.f1_data.drivers` table",
+      "sql": "SELECT COUNT(DISTINCT year) FROM (SELECT CAST(SUBSTR(CAST(ds.raceId AS STRING), 1, 4) AS INT) AS year FROM `pitwall-492723.f1_data.driver_standings` ds JOIN `pitwall-492723.f1_data.drivers` d ON ds.driverId = d.driverId WHERE d.forename = 'Michael' AND d.surname = 'Schumacher' AND ds.position = 1 AND ds.raceId IN (SELECT MAX(ds_inner.raceId) FROM `pitwall-492723.f1_data.driver_standings` ds_inner GROUP BY CAST(SUBSTR(CAST(ds_inner.raceId AS STRING), 1, 4) AS INT)))",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 4,
+      "tool_calls": 3,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "schumacher",
+          "7"
+        ],
+        "misses": [],
+        "score": 1.0
+      },
+      "passed": true
+    },
+    {
+      "id": 3,
+      "question": "Which constructor has the most race wins in F1 history?",
+      "category": "stats",
+      "answer": "Ferrari holds the record for the most race wins in F1 history, with a remarkable 1990 wins.\n\n**Source:** `pitwall-492723.f1_data.constructor_standings`, `pitwall-492723.f1_data.constructors`",
+      "sql": "SELECT t2.name, SUM(t1.wins) AS total_wins FROM `pitwall-492723.f1_data.constructor_standings` AS t1 JOIN `pitwall-492723.f1_data.constructors` AS t2 ON t1.constructorId = t2.constructorId GROUP BY t2.name ORDER BY total_wins DESC LIMIT 1",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 3,
+      "tool_calls": 2,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "ferrari"
+        ],
+        "misses": [],
+        "score": 1.0
+      },
+      "passed": true
+    },
+    {
+      "id": 4,
+      "question": "Who won the most races in a single F1 season?",
+      "category": "stats",
+      "answer": "Max Verstappen holds the record for the most wins in a single F1 season, achieving an incredible 19 victories in 2023.\n\n**Sources:** `pitwall-492723.f1_data.results`, `pitwall-492723.f1_data.races`, `pitwall-492723.f1_data.drivers`",
+      "sql": "\nSELECT\n    d.forename,\n    d.surname,\n    r.year,\n    COUNT(res.raceId) AS wins_in_season\nFROM\n    `pitwall-492723.f1_data.results` AS res\nJOIN\n    `pitwall-492723.f1_data.races` AS r\nON\n    res.raceId = r.raceId\nJOIN\n    `pitwall-492723.f1_data.drivers` AS d\nON\n    res.driverId = d.driverId\nWHERE\n    res.position = 1\nGROUP BY\n    d.forename,\n    d.surname,\n    r.year\nORDER BY\n    wins_in_season DESC\nLIMIT 1\n",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 3,
+      "tool_calls": 2,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "verstappen",
+          "19"
+        ],
+        "misses": [],
+        "score": 1.0
+      },
+      "passed": true
+    },
+    {
+      "id": 5,
+      "question": "Which circuit has hosted the most F1 races?",
+      "category": "stats",
+      "answer": "The circuit that has hosted the most F1 races is the Autodromo Nazionale di Monza, with a total of 74 races.\n\n**Sources:**\n* `pitwall-492723.f1_data.races`\n* `pitwall-492723.f1_data.circuits`",
+      "sql": "SELECT c.name AS circuit_name, COUNT(r.raceId) AS num_races FROM `pitwall-492723.f1_data.races` AS r JOIN `pitwall-492723.f1_data.circuits` AS c ON r.circuitId = c.circuitId GROUP BY c.name ORDER BY num_races DESC LIMIT 1",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 3,
+      "tool_calls": 2,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "monza"
+        ],
+        "misses": [
+          "silverstone",
+          "monaco"
+        ],
+        "score": 0.33
+      },
+      "passed": true
+    },
+    {
+      "id": 6,
+      "question": "What nationality has produced the most F1 drivers?",
+      "category": "stats",
+      "answer": "The United Kingdom has produced the most Formula 1 drivers, with a total of 166 drivers.\n\nData from `pitwall-492723.f1_data.drivers`.",
+      "sql": "SELECT nationality, COUNT(driverId) AS num_drivers FROM `pitwall-492723.f1_data.drivers` GROUP BY nationality ORDER BY num_drivers DESC LIMIT 1",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 3,
+      "tool_calls": 2,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": false,
+        "hits": [],
+        "misses": [
+          "british",
+          "uk",
+          "american"
+        ],
+        "score": 0.0
+      },
+      "passed": false
+    },
+    {
+      "id": 7,
+      "question": "Who has the most pole positions in F1 history?",
+      "category": "stats",
+      "answer": "Lewis Hamilton holds the record for the most pole positions in F1 history, with an impressive 107 poles.\n\nData used: `pitwall-492723.f1_data.qualifying`, `pitwall-492723.f1_data.drivers`",
+      "sql": "SELECT d.forename, d.surname, COUNT(q.qualifyId) AS pole_positions FROM `pitwall-492723.f1_data.qualifying` AS q JOIN `pitwall-492723.f1_data.drivers` AS d ON q.driverId = d.driverId WHERE q.position = 1 GROUP BY d.forename, d.surname ORDER BY pole_positions DESC LIMIT 1",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 3,
+      "tool_calls": 2,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "hamilton"
+        ],
+        "misses": [
+          "senna"
+        ],
+        "score": 0.5
+      },
+      "passed": true
+    },
+    {
+      "id": 8,
+      "question": "Which team has the fastest average pit stop time?",
+      "category": "stats",
+      "answer": "The team with the fastest average pit stop time is **Virgin**, with an average pit stop duration of 24.24 seconds.\n\n**Source:** `pitwall-492723.f1_data.pit_stops`, `pitwall-492723.f1_data.results`, `pitwall-492723.f1_data.constructors`",
+      "sql": "\nSELECT\n    t2.name AS constructor_name,\n    AVG(t1.milliseconds) / 1000 AS average_pit_stop_duration_seconds\n  FROM\n    `pitwall-492723.f1_data.pit_stops` AS t1\n    INNER JOIN `pitwall-492723.f1_data.results` AS t3 ON t1.raceId = t3.raceId AND t1.driverId = t3.driverId\n    INNER JOIN `pitwall-492723.f1_data.constructors` AS t2 ON t3.constructorId = t2.constructorId\n  GROUP BY\n    constructor_name\n  ORDER BY\n    average_pit_stop_duration_seconds ASC\n  LIMIT 1\n",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 8,
+      "tool_calls": 7,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "virgin"
+        ],
+        "misses": [
+          "red bull",
+          "mercedes",
+          "ferrari"
+        ],
+        "score": 0.25
+      },
+      "passed": true
+    },
+    {
+      "id": 9,
+      "question": "How many races did Ayrton Senna win in his F1 career?",
+      "category": "stats",
+      "answer": "Ayrton Senna won 41 races in his Formula 1 career.\n\n**Sources:**\n*   `pitwall-492723.f1_data.results` table\n*   `pitwall-492723.f1_data.drivers` table",
+      "sql": "SELECT count(*) FROM `pitwall-492723.f1_data.results` AS r JOIN `pitwall-492723.f1_data.drivers` AS d ON r.driverId = d.driverId WHERE d.forename = 'Ayrton' AND d.surname = 'Senna' AND r.position = 1",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 4,
+      "tool_calls": 3,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "41",
+          "senna"
+        ],
+        "misses": [],
+        "score": 1.0
+      },
+      "passed": true
+    },
+    {
+      "id": 10,
+      "question": "Which driver has the highest glamour index?",
+      "category": "glamour",
+      "answer": "Lewis Hamilton has the highest glamour index with a score of 11.48.\n\nThis information was retrieved from the `glamour_index` table.",
+      "sql": "SELECT t1.full_name, t1.glamour_index FROM `pitwall-492723.f1_data.glamour_index` AS t1 ORDER BY t1.glamour_index DESC LIMIT 1",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 3,
+      "tool_calls": 2,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "hamilton"
+        ],
+        "misses": [],
+        "score": 1.0
+      },
+      "passed": true
+    },
+    {
+      "id": 11,
+      "question": "Which driver has the highest estimated market value?",
+      "category": "glamour",
+      "answer": "With an estimated market value of $285 million USD, Lewis Hamilton has the highest market value among all drivers.\n\nSources: `glamour_index` table.",
+      "sql": "SELECT full_name, est_market_value_M_USD FROM `pitwall-492723.f1_data.glamour_index` ORDER BY est_market_value_M_USD DESC LIMIT 1",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 3,
+      "tool_calls": 2,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "hamilton"
+        ],
+        "misses": [],
+        "score": 1.0
+      },
+      "passed": true
+    },
+    {
+      "id": 12,
+      "question": "Tell me about Ayrton Senna's driving style",
+      "category": "narrative",
+      "answer": "Ayrton Senna was renowned for his aggressive and uncompromising driving style. He was particularly acclaimed for his exceptional performances in wet-weather conditions, with notable examples including the 1984 Monaco, 1985 Portuguese, and 1993 European Grands Prix. Senna was deeply driven, constantly seeking new limits and experiences in his racing. He was also fiercely proud of his abilities and reacted strongly to criticism.\n\nSource: Ayrton_Senna Wikipedia biography",
+      "sql": null,
+      "sources": [
+        "Wikipedia RAG"
+      ],
+      "rounds": 2,
+      "tool_calls": 1,
+      "sql_check": {
+        "sql_generated": false,
+        "sql_executed": false,
+        "has_results": false,
+        "score": 0
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "senna",
+          "wet",
+          "aggressive",
+          "monaco"
+        ],
+        "misses": [],
+        "score": 1.0
+      },
+      "passed": true
+    },
+    {
+      "id": 13,
+      "question": "What is Red Bull Racing known for?",
+      "category": "narrative",
+      "answer": "Red Bull Racing, also known as Oracle Red Bull Racing or simply RBR, is a Formula One racing team competing under an Austrian license but based in England. It is one of two F1 teams owned by Red Bull GmbH.\n\nThe team is known for:\n*   Its long-standing management by Christian Horner, who led the team from its formation in 2005 until 2025.\n*   Various engine partnerships throughout its history, including Cosworth, Honda (and its rebadging as RBPT), and a future partnership with Ford starting in 20",
+      "sql": null,
+      "sources": [
+        "Wikipedia RAG"
+      ],
+      "rounds": 2,
+      "tool_calls": 1,
+      "sql_check": {
+        "sql_generated": false,
+        "sql_executed": false,
+        "has_results": false,
+        "score": 0
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "red bull"
+        ],
+        "misses": [
+          "verstappen",
+          "vettel"
+        ],
+        "score": 0.33
+      },
+      "passed": true
+    },
+    {
+      "id": 14,
+      "question": "How many races are in the Ergast F1 dataset?",
+      "category": "meta",
+      "answer": "There are 1125 races in the Ergast F1 dataset.\n\n**Sources:**\n*   `pitwall-492723.f1_data.races` table",
+      "sql": "SELECT COUNT(*) FROM `pitwall-492723.f1_data.races`",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 3,
+      "tool_calls": 2,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "1"
+        ],
+        "misses": [],
+        "score": 1.0
+      },
+      "passed": true
+    },
+    {
+      "id": 15,
+      "question": "Which driver won the most races at Monaco?",
+      "category": "stats",
+      "answer": "Ayrton Senna holds the record for the most wins at the Monaco Grand Prix, with a remarkable 6 victories.\n\n**Sources:** `pitwall-492723.f1_data.results`, `pitwall-492723.f1_data.races`, `pitwall-492723.f1_data.drivers`",
+      "sql": "\nSELECT\n    d.forename,\n    d.surname,\n    COUNT(r.resultId) AS total_wins\nFROM\n    `pitwall-492723.f1_data.results` AS r\nJOIN\n    `pitwall-492723.f1_data.races` AS ra\n    ON r.raceId = ra.raceId\nJOIN\n    `pitwall-492723.f1_data.drivers` AS d\n    ON r.driverId = d.driverId\nWHERE\n    ra.name LIKE '%Monaco Grand Prix%' AND r.position = 1\nGROUP BY\n    d.driverId, d.forename, d.surname\nORDER BY\n    total_wins DESC\nLIMIT 1\n",
+      "sources": [
+        "Schema index",
+        "BigQuery"
+      ],
+      "rounds": 3,
+      "tool_calls": 2,
+      "sql_check": {
+        "sql_generated": true,
+        "sql_executed": true,
+        "has_results": true,
+        "score": 1
+      },
+      "faith_check": {
+        "passed": true,
+        "hits": [
+          "senna",
+          "monaco"
+        ],
+        "misses": [],
+        "score": 1.0
+      },
+      "passed": true
+    }
+  ]
+}
