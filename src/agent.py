@@ -6,6 +6,7 @@ import re
 from typing import Any
 from dotenv import load_dotenv
 import google.generativeai as genai
+import anthropic as anthropic_sdk
 
 from src.bigquery_client import run_query
 from src.schema_retriever import retrieve as schema_retrieve
@@ -17,8 +18,9 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-PROJECT_ID = os.getenv("BIGQUERY_PROJECT_ID")
-DATASET    = os.getenv("BIGQUERY_DATASET")
+PROJECT_ID   = os.getenv("BIGQUERY_PROJECT_ID")
+DATASET      = os.getenv("BIGQUERY_DATASET")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
 
 # ── System prompt ────────────────────────────────────────────────────
 SYSTEM_PROMPT = f"""You are PitWall, an expert F1 analytics assistant with deep knowledge
@@ -33,44 +35,35 @@ You have access to three tools:
 BigQuery project : {PROJECT_ID}
 BigQuery dataset : {DATASET}
 
-STRICT RULES — follow every one of these without exception:
+STRICT RULES:
 - Always call get_schema_context before writing any SQL — never guess column names
-- After calling get_schema_context, you MUST always follow up with run_sql — never stop after schema retrieval alone
-- For questions about driver personalities, careers, history or "why" questions, call get_narrative_context
-- For hybrid questions (stats + narrative), call BOTH get_narrative_context AND get_schema_context, then run_sql
-- After retrieving narrative context for a hybrid question, you MUST still run SQL for the stats — never stop after narrative alone
-- Only give a final text answer when you have BOTH retrieved context AND executed SQL and have real results in hand
+- After calling get_schema_context, you MUST follow up with run_sql
+- For hybrid questions call BOTH get_narrative_context AND get_schema_context, then run_sql
+- Only give a final answer when you have retrieved context AND executed SQL
 - Always use fully qualified table names: `{PROJECT_ID}.{DATASET}.table_name`
-- Handle NULL values gracefully in SQL (use COALESCE or IS NOT NULL filters)
-- The glamour_index table contains driver brand value, social following, luxury brand partnerships and glamour score — always use it for commercial, popularity, fame, or overhyped driver questions
-- When results come back, synthesise a clear, engaging English answer with a formatted table where appropriate
-- Cite which tables and sources you used at the end of your answer
-- If SQL returns no results, explain why and try an alternative query
-- Keep answers concise but complete — lead with the key insight
+- Handle NULL values with COALESCE or IS NOT NULL filters
+- The glamour_index table has driver brand value, social following, luxury partnerships
+- Synthesise a clear, engaging English answer with a formatted table where appropriate
+- Cite which tables and sources you used
+- If SQL returns no results, explain why and try an alternative
 """
 
-# ── Tool definitions (genai.protos format for v0.7.x) ────────────────
-# To add a new tool in future:
-#   1. Add a FunctionDeclaration here
-#   2. Add a handler in _execute_tool()
-#   Agent learns to use it automatically from the description alone.
-
-TOOLS = [
+# ── Gemini tool definitions ──────────────────────────────────────────
+GEMINI_TOOLS = [
     genai.protos.Tool(
         function_declarations=[
             genai.protos.FunctionDeclaration(
                 name="get_schema_context",
                 description=(
-                    "Retrieves the most relevant BigQuery table schemas for a given question. "
-                    "Always call this before writing SQL to get accurate table names and column names. "
-                    "Returns table descriptions, column names, and example questions each table can answer."
+                    "Retrieves the most relevant BigQuery table schemas for a question. "
+                    "Always call this before writing SQL to get accurate table and column names."
                 ),
                 parameters=genai.protos.Schema(
                     type=genai.protos.Type.OBJECT,
                     properties={
                         "question": genai.protos.Schema(
                             type=genai.protos.Type.STRING,
-                            description="The user's question or the SQL you are planning to write",
+                            description="The user question or planned SQL",
                         )
                     },
                     required=["question"],
@@ -79,9 +72,8 @@ TOOLS = [
             genai.protos.FunctionDeclaration(
                 name="get_narrative_context",
                 description=(
-                    "Retrieves relevant text passages from F1 driver and constructor Wikipedia biographies. "
-                    "Use this for questions about driver personalities, career histories, rivalries, "
-                    "team culture, or any 'why' and 'who' questions that SQL cannot answer."
+                    "Retrieves relevant text from F1 driver and constructor Wikipedia bios. "
+                    "Use for personality, career, history, or 'why'/'who' questions."
                 ),
                 parameters=genai.protos.Schema(
                     type=genai.protos.Type.OBJECT,
@@ -97,9 +89,8 @@ TOOLS = [
             genai.protos.FunctionDeclaration(
                 name="run_sql",
                 description=(
-                    "Executes a SQL query on BigQuery and returns the results. "
-                    "Only call this after retrieving schema context to ensure column names are correct. "
-                    "Returns a list of result rows."
+                    "Executes a SQL query on BigQuery and returns results. "
+                    "Only call after get_schema_context to ensure correct column names."
                 ),
                 parameters=genai.protos.Schema(
                     type=genai.protos.Type.OBJECT,
@@ -116,14 +107,60 @@ TOOLS = [
     )
 ]
 
+# ── Claude tool definitions (Anthropic format) ───────────────────────
+CLAUDE_TOOLS = [
+    {
+        "name": "get_schema_context",
+        "description": (
+            "Retrieves the most relevant BigQuery table schemas for a question. "
+            "Always call this before writing SQL to get accurate table and column names. "
+            "Returns table descriptions, columns, and example questions."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The user question or planned SQL"}
+            },
+            "required": ["question"],
+        },
+    },
+    {
+        "name": "get_narrative_context",
+        "description": (
+            "Retrieves relevant text from F1 driver and constructor Wikipedia biographies. "
+            "Use for personality, career history, rivalries, or any 'why'/'who' questions."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The question to search for"}
+            },
+            "required": ["question"],
+        },
+    },
+    {
+        "name": "run_sql",
+        "description": (
+            "Executes a SQL query on BigQuery and returns results. "
+            "Only call after get_schema_context to ensure correct column names."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Valid BigQuery SQL query"}
+            },
+            "required": ["query"],
+        },
+    },
+]
+
 
 # ── Tool executor ────────────────────────────────────────────────────
-# Maps tool names → Python functions.
-# To add a new tool: add elif block here + FunctionDeclaration above.
+# Shared across both providers — same tool logic regardless of LLM.
+# To add a new tool: add elif here + entry in both GEMINI_TOOLS and CLAUDE_TOOLS.
 
 def _execute_tool(tool_name: str, tool_args: dict) -> Any:
     """Execute a tool by name and return its result."""
-
     if tool_name == "get_schema_context":
         results   = schema_retrieve(tool_args["question"], top_k=3)
         formatted = []
@@ -152,8 +189,7 @@ def _execute_tool(tool_name: str, tool_args: dict) -> Any:
             rows = run_query(tool_args["query"])
             if not rows:
                 return "Query executed successfully but returned no results."
-            rows = rows[:50]  # cap at 50 rows to avoid context overflow
-            return json.dumps(rows, indent=2, default=str)
+            return json.dumps(rows[:50], indent=2, default=str)
         except Exception as e:
             return f"SQL ERROR: {str(e)}"
 
@@ -161,94 +197,202 @@ def _execute_tool(tool_name: str, tool_args: dict) -> Any:
         return f"Unknown tool: {tool_name}"
 
 
-# ── Rate limit retry wrapper ─────────────────────────────────────────
+# ── Provider implementations ─────────────────────────────────────────
+# Each provider wraps one LLM API behind a common interface:
+#   start_chat() → chat object
+#   send(chat, message) → response
+#   extract_tool_calls(response) → list of {name, args, tool_use_id}
+#   extract_text(response) → str
+#   has_text_answer(response) → bool
+#   make_tool_result(name, result, id) → provider-specific format
 
-def _send_with_retry(conversation, message, max_retries: int = 5):
+class GeminiProvider:
     """
-    Send a message with exponential backoff on rate limit errors.
-
-    On 429: extracts suggested wait time from error if available,
-    falls back to (attempt+1) * 30 seconds.
-    After max_retries, raises the original exception.
+    Wraps Gemini 2.x with function calling.
+    Uses genai.protos format required by google-generativeai v0.7.x.
     """
-    last_error = None
-    for attempt in range(max_retries):
-        try:
-            return conversation.send_message(message)
-        except Exception as e:
-            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                last_error = e
-                wait       = (attempt + 1) * 30
-                try:
-                    match = re.search(r'retry[^\d]+(\d+)', str(e))
-                    if match:
-                        wait = int(match.group(1)) + 5
-                except Exception:
-                    pass
-                logger.warning(
-                    f"Rate limit hit — waiting {wait}s "
-                    f"(attempt {attempt + 1}/{max_retries})"
-                )
-                time.sleep(wait)
-            else:
-                raise e
 
-    raise last_error
-
-
-# ── Response helpers ─────────────────────────────────────────────────
-
-def _has_tool_call(response) -> bool:
-    """Check if the model response contains a tool call."""
-    return (
-        bool(response.candidates)
-        and bool(response.candidates[0].content.parts)
-        and any(
-            hasattr(p, "function_call") and p.function_call.name
-            for p in response.candidates[0].content.parts
+    def __init__(self, model_name: str):
+        self.model_name = model_name
+        self.model      = genai.GenerativeModel(
+            model_name         = model_name,
+            system_instruction = SYSTEM_PROMPT,
+            tools              = GEMINI_TOOLS,
         )
-    )
+
+    def start_chat(self):
+        return self.model.start_chat(enable_automatic_function_calling=False)
+
+    def send(self, chat, message):
+        """Send with exponential backoff on rate limits."""
+        last_error = None
+        for attempt in range(5):
+            try:
+                return chat.send_message(message)
+            except Exception as e:
+                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                    last_error = e
+                    wait       = (attempt + 1) * 30
+                    try:
+                        m = re.search(r'retry[^\d]+(\d+)', str(e))
+                        if m:
+                            wait = int(m.group(1)) + 5
+                    except Exception:
+                        pass
+                    logger.warning(f"Gemini rate limit — waiting {wait}s (attempt {attempt+1}/5)")
+                    time.sleep(wait)
+                else:
+                    raise e
+        raise last_error
+
+    def extract_tool_calls(self, response) -> list[dict]:
+        calls = []
+        if not (response.candidates and response.candidates[0].content.parts):
+            return calls
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, "function_call") and part.function_call.name:
+                calls.append({
+                    "name":        part.function_call.name,
+                    "args":        dict(part.function_call.args),
+                    "tool_use_id": None,
+                })
+        return calls
+
+    def extract_text(self, response) -> str:
+        parts = []
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, "text") and part.text:
+                    parts.append(part.text)
+        return "".join(parts)
+
+    def has_text_answer(self, response) -> bool:
+        text = self.extract_text(response).strip().lower()
+        if len(text) <= 100:
+            return False
+        transitions = ["let's look at", "let me now", "now let's", "i will now",
+                       "let me retrieve", "let me check", "i'll now", "moving on to"]
+        return not any(phrase in text for phrase in transitions)
+
+    def make_tool_result(self, tool_name: str, result: str, tool_use_id=None):
+        return genai.protos.Part(
+            function_response=genai.protos.FunctionResponse(
+                name     = tool_name,
+                response = {"result": result},
+            )
+        )
 
 
-# Phrases that indicate the model is mid-answer, not done
-_TRANSITION_PHRASES = [
-    "let's look at",
-    "let me now",
-    "now let's",
-    "i will now",
-    "let me retrieve",
-    "let me check",
-    "i'll now",
-    "moving on to",
-    "next, let",
-]
-
-def _has_text_answer(response) -> bool:
+class ClaudeProvider:
     """
-    Check if the model has a complete final answer.
-    Filters out transitional phrases that indicate more work is needed.
+    Wraps Anthropic Claude with tool use.
+    Uses claude-sonnet-4-5 by default.
+    Maintains conversation history as a messages list per Anthropic's stateless API.
     """
-    for part in response.candidates[0].content.parts if (
-        response.candidates
-        and response.candidates[0].content.parts
-    ) else []:
-        if hasattr(part, "text") and part.text:
-            text = part.text.strip().lower()
-            if len(text) > 100:
-                # Check it's not a transition to more tool calls
-                is_transition = any(phrase in text for phrase in _TRANSITION_PHRASES)
-                if not is_transition:
-                    return True
-    return False
+
+    def __init__(self, model_name: str):
+        self.model_name = model_name
+        self.client     = anthropic_sdk.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        self.messages   = []
+
+    def start_chat(self):
+        """Reset conversation history for a new query."""
+        self.messages = []
+        return self
+
+    def send(self, chat, message):
+        """
+        Send a message to Claude.
+        message = str for initial question
+        message = list of tool results for subsequent rounds
+        """
+        if isinstance(message, str):
+            self.messages.append({"role": "user", "content": message})
+        else:
+            # Tool results from previous round
+            tool_results = [
+                {
+                    "type":        "tool_result",
+                    "tool_use_id": tr["tool_use_id"],
+                    "content":     tr["result"],
+                }
+                for tr in message
+            ]
+            self.messages.append({"role": "user", "content": tool_results})
+
+        last_error = None
+        for attempt in range(5):
+            try:
+                response = self.client.messages.create(
+                    model      = self.model_name,
+                    max_tokens = 2048,
+                    system     = SYSTEM_PROMPT,
+                    tools      = CLAUDE_TOOLS,
+                    messages   = self.messages,
+                )
+                # Append assistant turn to history for next round
+                self.messages.append({"role": "assistant", "content": response.content})
+                return response
+            except Exception as e:
+                if "rate" in str(e).lower() or "529" in str(e) or "overload" in str(e).lower():
+                    last_error = e
+                    wait       = (attempt + 1) * 30
+                    logger.warning(f"Claude rate limit — waiting {wait}s (attempt {attempt+1}/5)")
+                    time.sleep(wait)
+                else:
+                    raise e
+        raise last_error
+
+    def extract_tool_calls(self, response) -> list[dict]:
+        calls = []
+        for block in response.content:
+            if block.type == "tool_use":
+                calls.append({
+                    "name":        block.name,
+                    "args":        block.input,
+                    "tool_use_id": block.id,
+                })
+        return calls
+
+    def extract_text(self, response) -> str:
+        parts = []
+        for block in response.content:
+            if hasattr(block, "text"):
+                parts.append(block.text)
+        return "".join(parts)
+
+    def has_text_answer(self, response) -> bool:
+        return response.stop_reason == "end_turn" and len(self.extract_text(response).strip()) > 100
+
+    def make_tool_result(self, tool_name: str, result: str, tool_use_id=None):
+        return {"tool_use_id": tool_use_id, "result": result}
 
 
-def _extract_text(response) -> str:
-    """Extract and join all text parts from a model response."""
-    parts = []
-    for part in response.candidates[0].content.parts:
-        if hasattr(part, "text") and part.text:
-            parts.append(part.text)
-    return "".join(parts)
+# ── Provider factory ─────────────────────────────────────────────────
+
+def get_provider(model_name: str = None):
+    """
+    Return the correct LLM provider based on LLM_PROVIDER env var.
+
+    LLM_PROVIDER=gemini (default) → GeminiProvider
+    LLM_PROVIDER=claude            → ClaudeProvider
+
+    To add a new provider:
+      1. Implement a class with the same interface above
+      2. Add an elif here
+      No other changes needed anywhere.
+    """
+    provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+
+    if provider == "claude":
+        m = model_name if (model_name and "claude" in model_name) else "claude-sonnet-4-5"
+        logger.info(f"Provider: Claude — model: {m}")
+        return ClaudeProvider(m)
+
+    else:  # gemini (default)
+        m = model_name or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        logger.info(f"Provider: Gemini — model: {m}")
+        return GeminiProvider(m)
 
 
 # ── Agent ────────────────────────────────────────────────────────────
@@ -258,23 +402,16 @@ class PitWallAgent:
     Agentic F1 analytics assistant.
 
     Design principles:
-    - Agent stops naturally when it has a complete answer (>100 chars)
-    - MAX_AGENT_ROUNDS in .env is a safety guardrail only
-    - Model configurable via GEMINI_MODEL in .env — no code changes to switch
-    - Adding tools: FunctionDeclaration + _execute_tool handler only
-    - Rate limits handled transparently with exponential backoff
+    - Model-agnostic: swap LLM by setting LLM_PROVIDER in .env, zero code changes
+    - Agent stops naturally when it has a complete answer — not on arbitrary count
+    - MAX_AGENT_ROUNDS is a safety guardrail only (circuit breaker)
+    - Adding tools: _execute_tool + provider tool definitions — nothing else changes
     - Stateless per query — safe for concurrent Streamlit sessions
     """
 
     def __init__(self, model_name: str = None):
-        model_name      = model_name or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.model_name = model_name
-        self.model      = genai.GenerativeModel(
-            model_name         = model_name,
-            system_instruction = SYSTEM_PROMPT,
-            tools              = TOOLS,
-        )
-        logger.info(f"PitWall agent initialised — model: {model_name}")
+        self.provider   = get_provider(model_name)
 
     def ask(
         self,
@@ -285,15 +422,15 @@ class PitWallAgent:
         """
         Ask PitWall a question.
 
-        Agent loop terminates when:
-          (a) Model produces a complete text answer (>100 chars)  ← natural stop
-          (b) Model requests no more tool calls                   ← natural stop
-          (c) MAX_AGENT_ROUNDS ceiling hit                        ← safety guardrail
+        Terminates when:
+          (a) Provider signals a complete text answer   ← natural stop
+          (b) No more tool calls requested              ← natural stop
+          (c) MAX_AGENT_ROUNDS ceiling hit              ← safety guardrail
 
-        Returns dict: answer, sql, tool_calls, sources, model, rounds
+        Returns: answer, sql, tool_calls, sources, model, provider, rounds
         """
         max_rounds   = max_rounds or int(os.getenv("MAX_AGENT_ROUNDS", "20"))
-        conversation = self.model.start_chat(enable_automatic_function_calling=False)
+        chat         = self.provider.start_chat()
         tool_calls   = []
         sql_used     = None
         sources_used = set()
@@ -301,39 +438,37 @@ class PitWallAgent:
 
         if verbose:
             print(f"\n{'='*60}")
-            print(f"Q     : {question}")
-            print(f"Model : {self.model_name}")
+            print(f"Q        : {question}")
+            print(f"Provider : {os.getenv('LLM_PROVIDER','gemini')}")
             print(f"{'='*60}")
 
-        response = _send_with_retry(conversation, question)
+        response = self.provider.send(chat, question)
 
         for round_num in range(max_rounds):
             rounds_taken = round_num + 1
 
-            # Natural stop 1 — model has a complete answer
-            if _has_text_answer(response):
+            # Natural stop 1 — complete answer
+            if self.provider.has_text_answer(response):
                 if verbose:
-                    print(f"\n[Round {round_num}] Model has answer — stopping")
+                    print(f"\n[Round {round_num}] Answer ready — stopping")
                 break
 
-            # Natural stop 2 — no more tool calls requested
-            if not _has_tool_call(response):
+            # Natural stop 2 — no more tool calls
+            calls = self.provider.extract_tool_calls(response)
+            if not calls:
                 if verbose:
                     print(f"\n[Round {round_num}] No tool calls — stopping")
                 break
 
-            # Process all tool calls in this round
+            # Execute all tool calls in this round
             tool_results = []
-
-            for part in response.candidates[0].content.parts:
-                if not hasattr(part, "function_call") or not part.function_call.name:
-                    continue
-
-                tool_name = part.function_call.name
-                tool_args = dict(part.function_call.args)
+            for call in calls:
+                tool_name   = call["name"]
+                tool_args   = call["args"]
+                tool_use_id = call.get("tool_use_id")
 
                 if verbose:
-                    print(f"\n[Round {round_num + 1}] Tool : {tool_name}")
+                    print(f"\n[Round {round_num+1}] Tool: {tool_name}")
                     print(f"  Args: {json.dumps(tool_args, indent=2)}")
 
                 result = _execute_tool(tool_name, tool_args)
@@ -353,39 +488,27 @@ class PitWallAgent:
                     sources_used.add("Wikipedia RAG")
 
                 if verbose:
-                    print(f"  Result preview: {str(result)[:300]}...")
+                    print(f"  Result preview: {str(result)[:250]}...")
 
                 tool_results.append(
-                    genai.protos.Part(
-                        function_response=genai.protos.FunctionResponse(
-                            name     = tool_name,
-                            response = {"result": str(result)},
-                        )
-                    )
+                    self.provider.make_tool_result(tool_name, str(result), tool_use_id)
                 )
 
-            response = _send_with_retry(conversation, tool_results)
+            response = self.provider.send(chat, tool_results)
 
         else:
-            logger.warning(
-                f"MAX_AGENT_ROUNDS ({max_rounds}) hit for: '{question}'. "
-                f"Increase MAX_AGENT_ROUNDS in .env if needed."
-            )
+            logger.warning(f"MAX_AGENT_ROUNDS ({max_rounds}) hit for: '{question}'")
 
-        final_answer = _extract_text(response)
+        final_answer = self.provider.extract_text(response)
         if not final_answer:
-            final_answer = (
-                "I was unable to generate an answer. "
-                "Please try rephrasing the question."
-            )
+            final_answer = "I was unable to generate an answer. Please try rephrasing."
 
         if verbose:
             print(f"\nANSWER:\n{final_answer}")
-            print(f"\nSOURCES : {list(sources_used)}")
-            print(f"TOOLS   : {[t['tool'] for t in tool_calls]}")
-            print(f"ROUNDS  : {rounds_taken}")
+            print(f"SOURCES  : {list(sources_used)}")
+            print(f"ROUNDS   : {rounds_taken}")
             if sql_used:
-                print(f"\nSQL:\n{sql_used}")
+                print(f"SQL:\n{sql_used}")
 
         return {
             "answer":     final_answer,
@@ -393,6 +516,7 @@ class PitWallAgent:
             "tool_calls": tool_calls,
             "sources":    list(sources_used),
             "model":      self.model_name,
+            "provider":   os.getenv("LLM_PROVIDER", "gemini"),
             "rounds":     rounds_taken,
         }
 
@@ -403,9 +527,8 @@ _agent = None
 
 def get_agent() -> PitWallAgent:
     """
-    Singleton — reuses the same agent across Streamlit reruns.
-    Model reads from GEMINI_MODEL in .env.
-    Switch model: update .env and restart — zero code changes.
+    Singleton — reuses agent across Streamlit reruns.
+    Provider and model read from .env — zero code changes to switch.
     """
     global _agent
     if _agent is None:
@@ -416,11 +539,7 @@ def get_agent() -> PitWallAgent:
 def ask(question: str, verbose: bool = False) -> dict:
     """
     Module-level convenience function.
-
-    Usage:
-        from src.agent import ask
-        result = ask("Who has the most wins?")
-        print(result["answer"])
+    Usage: from src.agent import ask
     """
     return get_agent().ask(question, verbose=verbose)
 
@@ -428,6 +547,8 @@ def ask(question: str, verbose: bool = False) -> dict:
 # ── Test harness ─────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    print(f"Provider: {os.getenv('LLM_PROVIDER', 'gemini')}")
+
     test_questions = [
         "Who has the most race wins in F1 history?",
         "Which team has the fastest average pit stop time?",
@@ -436,15 +557,12 @@ if __name__ == "__main__":
     ]
 
     agent = PitWallAgent()
-
     for question in test_questions:
         result = agent.ask(question, verbose=True)
         print(f"\n{'='*60}")
-        print(f"ANSWER:\n{result['answer']}")
+        print(f"ANSWER   :\n{result['answer']}")
+        print(f"PROVIDER : {result['provider']}")
+        print(f"ROUNDS   : {result['rounds']}")
         if result["sql"]:
-            print(f"\nSQL:\n{result['sql']}")
-        print(f"\nSOURCES    : {result['sources']}")
-        print(f"TOOLS USED : {[t['tool'] for t in result['tool_calls']]}")
-        print(f"MODEL      : {result['model']}")
-        print(f"ROUNDS     : {result['rounds']}")
+            print(f"SQL:\n{result['sql']}")
         input("\nPress Enter for next question...")
